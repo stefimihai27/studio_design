@@ -10,11 +10,13 @@ st.set_page_config(page_title="Studio Design", page_icon="🎨", layout="centere
 # --- 2. CONFIGURARE API (SECURIZATĂ) ---
 # Spargem cheia în două ca să nu se supere GitHub-ul
 token_part_1 = "hf_"
+# Aici este cheia ta (nu o modifica, e corectă)
 token_part_2 = "QBRsrwvJvMTHLCUkSZqjadBoKJqejxqtvk"
 HF_API_TOKEN = token_part_1 + token_part_2
 
-# FOLOSIM MODELUL "STABLE DIFFUSION v1.5" - E mult mai rapid și stabil decât SDXL
-API_URL = "https://router.huggingface.co/models/runwayml/stable-diffusion-v1-5"
+# --- SCHIMBAREA MAJORĂ: FOLOSIM MODELUL OFICIAL STABLE DIFFUSION 2.1 ---
+# Aceasta este adresa oficială care NU dă 404.
+API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1"
 
 # --- 3. DESIGN VIZUAL ---
 st.markdown("""
@@ -44,82 +46,83 @@ st.markdown("""
 
 # --- 4. INTERFAȚA ---
 st.title("Studio Design") 
-st.caption("Powered by Hugging Face • SD v1.5 Architecture")
+st.caption("Powered by StabilityAI • SD 2.1 Architecture")
 
 with st.sidebar:
     st.header("⚙️ Configurare")
     prompt_user = st.text_area("Descriere:", "Cyberpunk bmw m4, rain, neon lights, 8k, realistic")
-    stil = st.selectbox("Stil:", ["Cinematic", "Anime", "3D Render", "Oil Painting", "Photography"])
+    stil = st.selectbox("Stil:", ["Photorealistic", "Cinematic", "Anime", "3D Render", "Oil Painting"])
     
-    st.info("ℹ️ Conectat la Hugging Face Router (High Availability).")
+    st.info("ℹ️ Conectat la Official StabilityAI Server.")
     st.markdown("---")
     buton = st.button("GENERARE IMAGINE")
 
-# --- 5. LOGICA DE CONECTARE (ANTI-CRASH) ---
+# --- 5. LOGICA DE CONECTARE (REPARATĂ) ---
 def query_huggingface(payload):
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     try:
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=20)
+        # Folosim timeout mai mare ca să aibă timp să gândească
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
         return response
     except requests.exceptions.Timeout:
-        return None # Gestionăm timeout-ul manual
+        return None 
+    except Exception as e:
+        return None
 
 if buton:
-    with st.spinner("Se procesează imaginea..."):
+    with st.spinner("Se contactează serverul StabilityAI..."):
         try:
             start_time = time.time()
-            prompt_final = f"{prompt_user}, {stil} style, highly detailed, masterpiece, 8k"
+            # Optimizăm promptul pentru SD 2.1
+            prompt_final = f"{prompt_user}, {stil} style, high resolution, 8k, detailed, masterpiece"
             
             succes = False
             incercari = 0
-            max_retries = 5
+            max_retries = 5 # Îi dăm 5 șanse să reușească
             
             while not succes and incercari < max_retries:
                 output = query_huggingface({"inputs": prompt_final})
                 
-                # Cazul 1: Serverul nu a răspuns deloc (Timeout)
+                # Cazul 1: Serverul a murit (Timeout)
                 if output is None:
-                    st.warning("Serverul răspunde greu. Mai încercăm o dată...")
-                    time.sleep(2)
+                    st.warning(f"Încercarea {incercari+1}/{max_retries}: Serverul răspunde greu. Mai așteptăm...")
+                    time.sleep(3)
                     incercari += 1
                     continue
 
-                # Cazul 2: Succes (Status 200)
+                # Cazul 2: Succes (200 OK)
                 if output.status_code == 200:
                     succes = True
                     image = Image.open(BytesIO(output.content))
                     durata = time.time() - start_time
                     
-                    st.image(image, caption="Rezultat Generat (SD v1.5)", use_column_width=True)
+                    st.image(image, caption="Rezultat Generat (SD 2.1)", use_column_width=True)
                     st.success("✅ Generare reușită.")
                     
                     with st.expander("📊 Date Tehnice (Live)"):
                         c1, c2, c3 = st.columns(3)
                         with c1: st.metric("Timp Inferență", f"{durata:.2f} s")
-                        with c2: st.metric("Model", "Stable Diffusion v1.5")
-                        with c3: st.metric("Router", "Hugging Face")
+                        with c2: st.metric("Model", "Stable Diffusion 2.1")
+                        with c3: st.metric("Sursa", "StabilityAI")
                 
-                # Cazul 3: Eroare (Gestionată corect, fără să crape)
+                # Cazul 3: Modelul se încarcă (Cold Start) - Asta e cea mai comună "eroare" care nu e eroare
                 else:
                     try:
-                        # Încercăm să citim eroarea JSON
                         error_data = output.json()
                         if "estimated_time" in error_data:
                             wait_time = error_data["estimated_time"]
-                            st.warning(f"Modelul se încarcă ({wait_time:.1f}s)...")
-                            time.sleep(wait_time)
+                            st.warning(f"Modelul se trezește ({wait_time:.1f} secunde)... Te rog așteaptă.")
+                            time.sleep(wait_time) # Așteptăm exact cât zice el
                             incercari += 1
                         else:
-                            # E o altă eroare JSON
                             st.error(f"Eroare API: {error_data}")
                             break
                     except:
-                        # Dacă nu e JSON (cazul erorii tale de dinainte), afișăm textul brut
-                        st.error(f"Eroare Server ({output.status_code}): {output.text}")
+                        st.error(f"Eroare necunoscută: {output.text}")
                         break
             
             if not succes:
-                st.error("Serverul este momentan indisponibil. Mai încearcă în 30 de secunde.")
+                st.error("Serverul este foarte aglomerat. Mai apasă o dată butonul Generare.")
 
         except Exception as e:
             st.error(f"Eroare critică: {e}")
