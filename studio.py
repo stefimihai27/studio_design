@@ -9,13 +9,12 @@ import uuid
 # --- 1. CONFIGURARE PAGINĂ ---
 st.set_page_config(page_title="Studio Design", page_icon="🎨", layout="centered")
 
-# --- 2. LISTA IDENTITĂȚI FALSE (User-Agents) ---
-# Asta păcălește serverul să creadă că suntem pe dispozitive diferite
+# --- 2. IDENTITĂȚI FALSE (Ca să nu te blocheze) ---
 user_agents = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15',
-    'Mozilla/5.0 (Linux; Android 10; K) Chrome/120.0.0.0 Mobile Safari/537.36'
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/122.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Linux; Android 14; Samsung Galaxy S24) Chrome/122.0.0.0 Mobile Safari/537.36'
 ]
 
 # --- 3. DESIGN VIZUAL (Vișiniu & Neon) ---
@@ -46,7 +45,7 @@ st.markdown("""
 
 # --- 4. INTERFAȚA ---
 st.title("Studio Design") 
-st.caption("Engine: Pollinations Turbo (Unlimited Tier)")
+st.caption("Engine: Pollinations Turbo (Free Tier)")
 
 with st.sidebar:
     st.header("⚙️ Configurare")
@@ -57,7 +56,7 @@ with st.sidebar:
     st.markdown("---")
     buton = st.button("GENERARE IMAGINE")
 
-# --- 5. LOGICA VECHE DAR ÎMBUNĂTĂȚITĂ ---
+# --- 5. LOGICA DE EVITARE A PLĂȚII ---
 if buton:
     with st.spinner("Se generează design-ul..."):
         try:
@@ -65,47 +64,48 @@ if buton:
             
             # Generăm ID-uri unice ca să părem utilizatori noi de fiecare dată
             seed_unic = random.randint(1, 999999999)
-            session_id = str(uuid.uuid4())[:8]
+            session_id = str(uuid.uuid4())
             
             # Construim promptul
             prompt_final = f"{prompt_user}, {stil} style"
             prompt_safe = prompt_final.replace(" ", "%20")
             
-            # --- TRUCUL ANTI-PLATĂ ---
-            # 1. model=turbo (Gratis)
-            # 2. nologo=false (Acceptăm logo-ul ca să nu ne ceară bani)
-            # 3. private=true (Nu salvăm în galeria lor publică)
-            # 4. enhance=false (Nu folosim AI extra care costă)
-            url = f"https://image.pollinations.ai/prompt/{prompt_safe}?model=turbo&seed={seed_unic}&width=1024&height=1024&nologo=false&private=true&enhance=false"
+            # --- TRUCUL SUPREM ---
+            # model=turbo -> E gratis.
+            # nologo=false -> Acceptăm logo-ul (asta deblochează generarea).
+            # width=1024 -> Dimensiune standard.
+            url = f"https://image.pollinations.ai/prompt/{prompt_safe}?model=turbo&seed={seed_unic}&width=1024&height=1024&nologo=false"
             
-            # Header fals (Rotativ)
+            # Header fals
             headers = {
                 'User-Agent': random.choice(user_agents),
                 'Referer': 'https://www.google.com/'
             }
             
-            # Facem cererea
-            raspuns = requests.get(url, headers=headers, timeout=15)
+            # Facem cererea cu un mic delay aleatoriu ca să părem oameni
+            time.sleep(random.uniform(0.5, 1.5))
+            raspuns = requests.get(url, headers=headers, timeout=20)
             
             durata = time.time() - start_time
             
             if raspuns.status_code == 200:
-                # Verificăm să nu fie o imagine de eroare (prea mică)
-                if len(raspuns.content) < 5000:
-                    st.warning("Serverul a dat o eroare temporară. Mai apasă o dată.")
+                # Verificăm dacă ne-a trimis iar poza cu "We Moved" (care e mică de obicei)
+                # O imagine reală are peste 10.000 bytes.
+                if len(raspuns.content) < 10000:
+                     st.error("Serverul face modificări. Mai apasă o dată butonul Generare!")
                 else:
                     image = Image.open(BytesIO(raspuns.content))
                     st.image(image, caption="Design Generat (Turbo)", use_column_width=True)
                     st.success("✅ Generare reușită.")
                     
-                    # Păstrăm metricile pentru Flavius/Profesor
+                    # Metricile pentru Flavius
                     with st.expander("📊 Date Tehnice (Live)"):
                         c1, c2, c3 = st.columns(3)
                         with c1: st.metric("Timp Inferență", f"{durata:.2f} s")
                         with c2: st.metric("Model", "Pollinations-Turbo")
-                        with c3: st.metric("Session ID", session_id)
+                        with c3: st.metric("Seed", str(seed_unic)[:5])
             else:
-                st.error("⚠️ Serverul este ocupat. Mai încearcă în 10 secunde.")
+                st.error("⚠️ Serverul este ocupat momentan. Mai încearcă în 10 secunde.")
                 
         except Exception as e:
             st.error(f"Eroare: {e}")
