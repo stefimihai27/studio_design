@@ -70,3 +70,4 @@ if buton:
     
     # Metrici simple (fictive, doar pentru aspect, că nu putem măsura HTML-ul)
     st.caption(f"Seed utilizat: {seed} | Model: Turbo")
+
