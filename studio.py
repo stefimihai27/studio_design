@@ -66,4 +66,37 @@ st.markdown("""
         .stTextInput > div > div > input, .stTextArea > div > div > textarea {
              background-color: #5e1223 !important; color: white !important; border: 1px solid #ff1a4d; }
         .stButton > button {
-            background-color: #ff1
+            background-color: #ff1a4d !important; color: white !important; border: none; box-shadow: 0 0 15px #ff1a4d; width: 100%; }
+        .stButton > button:hover { background-color: #d9002f !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("Studio Design") 
+st.caption("Architecture: Hybrid Failover System")
+
+with st.sidebar:
+    st.header("⚙️ Configurare")
+    prompt_user = st.text_area("Descriere:", "Cyberpunk bmw m4, neon lights, rain, 8k, realistic")
+    stil = st.selectbox("Stil:", ["Photorealistic", "Cinematic", "Anime", "3D Render"])
+    st.markdown("---")
+    buton = st.button("GENERARE IMAGINE")
+
+# --- 5. LOGICA PRINCIPALĂ ---
+if buton:
+    with st.spinner("Se caută cel mai bun server disponibil..."):
+        prompt_final = f"{prompt_user}, {stil} style, 8k masterpiece"
+        
+        # PASUL 1: Încercăm Pollinations
+        img, source = generate_with_pollinations(prompt_final)
+        
+        # PASUL 2: Dacă Pollinations dă eroare sau poza cu "Moved", intră Hugging Face
+        if img is None:
+            st.warning("⚠️ Serverul public este ocupat. Se comută pe serverul privat...")
+            img, source = generate_with_huggingface(prompt_final)
+        
+        # AFIȘARE REZULTAT
+        if img:
+            st.image(img, caption=f"Generat cu succes ({source})", use_column_width=True)
+            st.success("✅ Proces finalizat.")
+        else:
+            st.error("Toate serverele sunt extrem de aglomerate. Mai încearcă o dată în 10 secunde.")
