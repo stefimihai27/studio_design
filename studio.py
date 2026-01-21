@@ -1,151 +1,72 @@
 import streamlit as st
-import requests
-from io import BytesIO
-from PIL import Image
-import time
+import random
+import urllib.parse
 
 # --- 1. CONFIGURARE PAGINĂ ---
 st.set_page_config(page_title="Studio Design", page_icon="🎨", layout="centered")
 
-# --- 2. CONFIGURARE API (SECURIZATĂ) ---
-# Cheia ta Hugging Face (Nu o modifica, e corectă)
-p1 = "hf_"
-p2 = "QBRsrwvJvMTHLCUkSZqjadBoKJqejxqtvk"
-HF_API_TOKEN = p1 + p2
-
-# --- 3. LISTA DE MODELE (REDUNDANȚĂ) ---
-# Dacă unul nu merge, îl alegi pe următorul din meniu!
-# Toate sunt verificate și folosesc infrastructura nouă.
-MODELE_AI = {
-    "🌟 Stable Diffusion XL (Best Quality)": "stabilityai/stable-diffusion-xl-base-1.0",
-    "🚀 Stable Diffusion 2.1 (Official)": "stabilityai/stable-diffusion-2-1",
-    "🎨 OpenJourney (Artistic/Midjourney Style)": "prompthero/openjourney",
-    "⚡ DreamShaper (Fast)": "Lykon/dreamshaper-8"
-}
-
-# --- 4. STYLE & SESSION STATE (GALERIE) ---
-if "galerie" not in st.session_state:
-    st.session_state.galerie = []
-
+# --- 2. DESIGN VIZUAL SIMPLU ---
 st.markdown("""
     <style>
         .stApp { background-color: #2c0710; }
         [data-testid="stSidebar"] { background-color: #3d0a16; }
-        h1 { color: #ff1a4d !important; text-shadow: 0 0 10px #ff0033; font-family: 'Helvetica', sans-serif; }
-        h2, h3, p, label, .stMarkdown, .stExpander { color: #ffccd5 !important; }
+        h1 { color: #ff1a4d !important; font-family: 'Helvetica', sans-serif; font-weight: 300; }
+        h2, h3, p, label, .stMarkdown { color: #ffccd5 !important; }
         .stTextInput > div > div > input, .stTextArea > div > div > textarea {
              background-color: #5e1223 !important; color: white !important; border: 1px solid #ff1a4d;
         }
         .stButton > button {
             background-color: #ff1a4d !important; color: white !important; border: none; box-shadow: 0 0 15px #ff1a4d;
+            width: 100%;
         }
         .stButton > button:hover { background-color: #d9002f !important; }
-        
-        /* Stilizare Galerie */
-        .img-card { border: 2px solid #ff1a4d; margin-bottom: 20px; border-radius: 10px; }
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- 5. INTERFAȚA ---
+# --- 3. INTERFAȚA ---
 st.title("Studio Design") 
-st.caption("Universal Interface • Hugging Face Router")
+st.caption("Direct Browser Rendering • No Server Limits")
 
 with st.sidebar:
     st.header("⚙️ Configurare")
-    
-    # SELECTORUL DE MODELE - Aici e secretul!
-    nume_model_ales = st.selectbox("Alege Motorul AI:", list(MODELE_AI.keys()))
-    id_model = MODELE_AI[nume_model_ales]
-    
     prompt_user = st.text_area("Descriere:", "Cyberpunk bmw m4, neon lights, rain, 8k, realistic")
-    stil = st.selectbox("Stil:", ["Photorealistic", "Cinematic", "Anime", "3D Render", "Oil Painting"])
-    
-    st.info(f"Conectat la: {id_model}")
+    stil = st.selectbox("Stil:", ["Photorealistic", "Cinematic", "Anime", "3D Render", "Illustration"])
     st.markdown("---")
-    
-    # Buton de șters galeria
-    if st.button("🗑️ Șterge Galeria"):
-        st.session_state.galerie = []
-        st.rerun()
-
     buton = st.button("GENERARE IMAGINE")
 
-# --- 6. ENGINE-UL DE CONECTARE ---
-def query_huggingface(model_path, payload):
-    # Folosim ADRESA NOUĂ "router" pentru a evita erorile vechi
-    api_url = f"https://router.huggingface.co/models/{model_path}"
-    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-    
-    try:
-        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
-        return response
-    except Exception as e:
-        return None
+# --- 4. LOGICA "BROWSER-ONLY" ---
+# Acest cod NU folosește serverul pentru a descărca poza (ceea ce cauza eroarea).
+# Generează doar un link HTML pe care browserul tău îl deschide singur.
 
 if buton:
-    with st.spinner(f"Se generează cu {nume_model_ales}..."):
-        start_time = time.time()
-        
-        # Construim promptul
-        prompt_final = f"{prompt_user}, {stil} style, masterpiece, best quality, 8k"
-        
-        # Logica de Retry
-        succes = False
-        output = None
-        
-        # Încercăm de 3 ori pe modelul selectat
-        for i in range(3):
-            output = query_huggingface(id_model, {"inputs": prompt_final})
-            
-            if output and output.status_code == 200:
-                succes = True
-                break
-            elif output and "estimated_time" in output.json():
-                wait = output.json()["estimated_time"]
-                st.warning(f"Modelul se încarcă ({wait:.0f}s)...")
-                time.sleep(wait)
-            else:
-                time.sleep(2) # Așteptăm puțin înainte de retry
-        
-        durata = time.time() - start_time
-        
-        if succes and output:
-            image = Image.open(BytesIO(output.content))
-            
-            # Salvăm în galerie
-            st.session_state.galerie.insert(0, {
-                "img": image,
-                "model": nume_model_ales,
-                "time": f"{durata:.2f}s",
-                "prompt": prompt_user
-            })
-            
-            st.success("✅ Generare reușită! Imaginea a fost adăugată în galerie.")
-        else:
-            if output:
-                try:
-                    err_msg = output.json().get('error', output.text)
-                    st.error(f"Eroare Server: {err_msg}")
-                    st.info("💡 Sfat: Încearcă să alegi ALT MODEL din meniul din stânga!")
-                except:
-                    st.error("Serverul nu a răspuns. Încearcă alt model din listă.")
-            else:
-                st.error("Eroare de conexiune. Verifică internetul.")
-
-# --- 7. AFIȘARE GALERIE (EXEMPLE PENTRU ȘCOALĂ) ---
-st.markdown("---")
-st.subheader("📂 Galerie Proiect (Exemple Generate)")
-
-if len(st.session_state.galerie) > 0:
-    for item in st.session_state.galerie:
-        with st.container():
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                st.image(item["img"], use_column_width=True)
-            with col2:
-                st.markdown(f"**Model:** {item['model']}")
-                st.markdown(f"**Timp:** {item['time']}")
-                st.info(f"Prompt: {item['prompt']}")
-            st.markdown("---")
-else:
-    st.write("Încă nu ai generat imagini. Apasă butonul pentru a începe.")
+    # 1. Pregătim link-ul
+    seed = random.randint(0, 1000000)
+    prompt_final = f"{prompt_user}, {stil} style"
+    # Codificăm textul corect pentru URL (ca să nu avem erori la spații)
+    prompt_encoded = urllib.parse.quote(prompt_final)
+    
+    # 2. Construim URL-ul către Pollinations (Model Turbo = Gratis)
+    # Folosim nologo=false pentru a evita blocajele de plată
+    image_url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?model=turbo&seed={seed}&width=1024&height=1024&nologo=false"
+    
+    st.success("✅ Comandă trimisă! Imaginea se încarcă mai jos...")
+    
+    # 3. AFIȘARE DIRECTĂ PRIN HTML (BYPASS LA SERVER)
+    # Asta face browserul tău să ia poza direct, ocolind serverul blocat.
+    st.markdown(
+        f"""
+        <div style="display: flex; justify-content: center; margin-top: 20px;">
+            <img src="{image_url}" 
+                 alt="Se generează..." 
+                 width="100%" 
+                 style="border-radius: 15px; box-shadow: 0 0 20px rgba(255, 26, 77, 0.5);"
+            />
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # Metrici simple (fictive, doar pentru aspect, că nu putem măsura HTML-ul)
+    st.caption(f"Seed utilizat: {seed} | Model: Turbo")
