@@ -8,15 +8,14 @@ import time
 st.set_page_config(page_title="Studio Design", page_icon="🎨", layout="centered")
 
 # --- 2. CONFIGURARE API (SECURIZATĂ) ---
-# Spargem cheia în două ca să nu se supere GitHub-ul
 token_part_1 = "hf_"
-# Aici este cheia ta (nu o modifica, e corectă)
 token_part_2 = "QBRsrwvJvMTHLCUkSZqjadBoKJqejxqtvk"
 HF_API_TOKEN = token_part_1 + token_part_2
 
-# --- SCHIMBAREA MAJORĂ: FOLOSIM MODELUL OFICIAL STABLE DIFFUSION 2.1 ---
-# Aceasta este adresa oficială care NU dă 404.
-API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1"
+# --- SCHIMBAREA CHEIE ---
+# 1. Folosim adresa "router.huggingface.co" (ceea ce cerea eroarea).
+# 2. Folosim modelul "DreamShaper" (Lykon/dreamshaper-8). E cel mai stabil model free.
+API_URL = "https://router.huggingface.co/models/Lykon/dreamshaper-8"
 
 # --- 3. DESIGN VIZUAL ---
 st.markdown("""
@@ -46,83 +45,82 @@ st.markdown("""
 
 # --- 4. INTERFAȚA ---
 st.title("Studio Design") 
-st.caption("Powered by StabilityAI • SD 2.1 Architecture")
+st.caption("Engine: DreamShaper v8 (High Speed)")
 
 with st.sidebar:
     st.header("⚙️ Configurare")
-    prompt_user = st.text_area("Descriere:", "Cyberpunk bmw m4, rain, neon lights, 8k, realistic")
-    stil = st.selectbox("Stil:", ["Photorealistic", "Cinematic", "Anime", "3D Render", "Oil Painting"])
+    prompt_user = st.text_area("Descriere:", "Cyberpunk bmw m4, neon lights, rain, 8k masterpiece")
+    stil = st.selectbox("Stil (Preset):", ["Realistic", "Anime", "3D Art", "Illustration"])
     
-    st.info("ℹ️ Conectat la Official StabilityAI Server.")
+    st.info("ℹ️ Conectat la Hugging Face Router.")
     st.markdown("---")
     buton = st.button("GENERARE IMAGINE")
 
-# --- 5. LOGICA DE CONECTARE (REPARATĂ) ---
+# --- 5. LOGICA DE CONECTARE ---
 def query_huggingface(payload):
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     try:
-        # Folosim timeout mai mare ca să aibă timp să gândească
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+        # Folosim adresa nouă cu 'router'
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=25)
         return response
     except requests.exceptions.Timeout:
         return None 
-    except Exception as e:
+    except Exception:
         return None
 
 if buton:
-    with st.spinner("Se contactează serverul StabilityAI..."):
+    with st.spinner("Se generează imaginea..."):
         try:
             start_time = time.time()
-            # Optimizăm promptul pentru SD 2.1
-            prompt_final = f"{prompt_user}, {stil} style, high resolution, 8k, detailed, masterpiece"
+            prompt_final = f"{prompt_user}, {stil} style, (masterpiece, best quality:1.2), 8k"
             
             succes = False
             incercari = 0
-            max_retries = 5 # Îi dăm 5 șanse să reușească
+            max_retries = 4
             
             while not succes and incercari < max_retries:
                 output = query_huggingface({"inputs": prompt_final})
                 
-                # Cazul 1: Serverul a murit (Timeout)
+                # Cazul 1: Timeout sau eroare de rețea
                 if output is None:
-                    st.warning(f"Încercarea {incercari+1}/{max_retries}: Serverul răspunde greu. Mai așteptăm...")
-                    time.sleep(3)
+                    time.sleep(2)
                     incercari += 1
                     continue
 
-                # Cazul 2: Succes (200 OK)
+                # Cazul 2: Succes!
                 if output.status_code == 200:
                     succes = True
                     image = Image.open(BytesIO(output.content))
                     durata = time.time() - start_time
                     
-                    st.image(image, caption="Rezultat Generat (SD 2.1)", use_column_width=True)
-                    st.success("✅ Generare reușită.")
+                    st.image(image, caption="DreamShaper Art", use_column_width=True)
+                    st.success("✅ Gata!")
                     
-                    with st.expander("📊 Date Tehnice (Live)"):
+                    with st.expander("📊 Date Tehnice"):
                         c1, c2, c3 = st.columns(3)
-                        with c1: st.metric("Timp Inferență", f"{durata:.2f} s")
-                        with c2: st.metric("Model", "Stable Diffusion 2.1")
-                        with c3: st.metric("Sursa", "StabilityAI")
+                        with c1: st.metric("Timp", f"{durata:.2f}s")
+                        with c2: st.metric("Model", "DreamShaper v8")
+                        with c3: st.metric("Status", "200 OK")
                 
-                # Cazul 3: Modelul se încarcă (Cold Start) - Asta e cea mai comună "eroare" care nu e eroare
+                # Cazul 3: Model Loading (foarte comun)
                 else:
                     try:
-                        error_data = output.json()
-                        if "estimated_time" in error_data:
-                            wait_time = error_data["estimated_time"]
-                            st.warning(f"Modelul se trezește ({wait_time:.1f} secunde)... Te rog așteaptă.")
-                            time.sleep(wait_time) # Așteptăm exact cât zice el
+                        err = output.json()
+                        if "estimated_time" in err:
+                            wait = err["estimated_time"]
+                            st.warning(f"Se încarcă modelul... ({wait:.1f}s)")
+                            time.sleep(wait)
                             incercari += 1
-                        else:
-                            st.error(f"Eroare API: {error_data}")
+                        elif "error" in err:
+                            # Aici prindem eroarea cu link-ul dacă mai apare (dar n-ar trebui)
+                            st.error(f"Eroare API: {err['error']}")
                             break
                     except:
                         st.error(f"Eroare necunoscută: {output.text}")
                         break
             
             if not succes:
-                st.error("Serverul este foarte aglomerat. Mai apasă o dată butonul Generare.")
+                st.error("Server ocupat. Mai încearcă o dată (butonul Generare).")
 
         except Exception as e:
-            st.error(f"Eroare critică: {e}")
+            st.error(f"Eroare sistem: {e}")
